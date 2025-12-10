@@ -1,0 +1,31 @@
+experiment_name: escapena1_skj5nr2t_eval
+
+random_state: 12345
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    metrics: [f1, precision, recall, specificity, auroc, auprc, accuracy]
+    bootstrap: 1000
+    ci: 95
+
+model:
+  name: SEResNext50Single
+  checkpoint: wandb/run-20251130_153807-yjds0hw3/files/SEResNext50Single.tar
+
+data: 
+  path: data/escapena1/test.csv
+  modality: "B0_NCCT"
+
+batch_size: 1
+
+preprocessing:
+  spacing: [0.45, 0.45, 2.5]
+  size: [291, 356, 54]
+  windowing:
+    level: 40
+    width: 80
+  normalize:
+    mean: 29.81
+    std: 12.06

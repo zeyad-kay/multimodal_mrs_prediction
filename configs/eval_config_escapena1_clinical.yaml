@@ -1,0 +1,36 @@
+# experiment_name: escapena1_zv5sjbqz_eval
+# experiment_name: escapena1_7kmjdhrc_eval
+# experiment_name: escapena1_2rsgauw8_eval
+# experiment_name: escapena1_drgu3hw7_eval
+# experiment_name: escapena1_5lpubzi7_eval
+experiment_name: escapena1_kmb7wq33_eval_vol
+
+random_state: 12345
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    metrics: [f1, precision, recall, specificity, auroc, auprc, accuracy]
+    bootstrap: 1000
+    ci: 95
+
+model:
+  # checkpoint: wandb/run-20251205_100414-zv5sjbqz/files/RandomForestClassifier.sav
+  # checkpoint: wandb/run-20251205_095716-7kmjdhrc/files/LogisticRegression.sav
+  # checkpoint: wandb/run-20251205_094301-2rsgauw8/files/RandomForestClassifier.sav
+  checkpoint: wandb/run-20251205_093612-kmb7wq33/files/LogisticRegression.sav
+  # checkpoint: wandb/run-20251201_165454-drgu3hw7/files/MLP.tar
+  # checkpoint: wandb/run-20251201_162814-5lpubzi7/files/RandomForestClassifier.sav
+  # checkpoint: wandb/run-20251201_163330-ch27j16c/files/LogisticRegression.sav
+  # checkpoint: wandb/run-20251209_001543-lxjaibdb/files/LogisticRegression.sav
+
+data: 
+  modality: Clinical
+  path: data/escapena1/test.csv
+  train_path: data/escapena1/fold_4/train.csv
+  # tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
+  
+  # tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease]
+
+  # pretty_tabular: ["Baseline mRS","Age","Baseline NIHSS","Onset Time to Treatment","Baseline ASPECTS","Male","Left Hemisphere Stroke","History of Hypertension","History of Smoking","History of Diabetes","History of Atrial Fibrilation","History of Peripheral Vascular Disease","History of High Cholestrol","History of Congestive Heart Failure","History of Chronic Renal Failure","History of Major Surgery","History of Past Stroke","History of Recent Stroke","History of Coronary Artery Disease","ICA Occlusion","Distal M1 MCA Occlusion","Proximal M1 MCA Occlusion","Mid M1 MCA Occlusion","M2 M3 MCA Occlusion"]

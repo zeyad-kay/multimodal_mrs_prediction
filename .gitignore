@@ -1,0 +1,14 @@
+__pycache__
+.venv
+.env
+wandb
+*.egg-info
+.vscode
+*.pth
+*.tar
+*.sav
+*.out
+data/
+models/
+outputs/
+*.csv

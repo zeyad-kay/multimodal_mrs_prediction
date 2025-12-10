@@ -1,0 +1,74 @@
+experiment_name: midl_clinical_lr_metrics_vol
+
+random_state: 1
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    loss: binary_cross_entropy
+    weight: 1.0
+    metrics: [f1, precision, auroc, auprc, accuracy]
+
+model:
+  # name: MLP
+  checkpoint: null
+  name: LogisticRegression
+  # name: RandomForestClassifier
+
+data: 
+  path: data/escapena1/
+  modality: Clinical
+  tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
+  # tabular: [mrs_BL,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
+  # tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease]
+
+
+# hyperparameters:
+#   epochs: 1000
+#   log_interval: 20
+#   batch_size: 1000
+#   learning_rate: 0.001
+#   early_stopping:
+#     patience: 1000
+#     target: good_outcome
+#     metric: f1
+#     goal: max
+#     min_improvement: 0.0004
+#   learning_rate_scheduler:
+#     factor: 0.99
+#     patience: 50
+
+
+hyperparameters:
+  penalty: l2
+  dual: False
+  tol: 0.0001
+  C: 1.0
+  fit_intercept: True
+  intercept_scaling: 1
+  class_weight: null
+  solver: lbfgs
+  max_iter: 5000
+  verbose: 0
+  warm_start: False
+  n_jobs: -1
+  l1_ratio: null
+
+# hyperparameters:
+#   n_estimators: 1000
+#   criterion: entropy
+#   max_depth: 10
+#   min_samples_split: 5
+#   min_samples_leaf: 2
+#   min_weight_fraction_leaf: 0
+#   max_features: sqrt
+#   max_leaf_nodes: null
+#   min_impurity_decrease: 0.0
+#   bootstrap: True
+#   oob_score: False
+#   n_jobs: -1
+#   warm_start: False
+#   class_weight: null
+#   ccp_alpha: 0
+#   max_samples: null

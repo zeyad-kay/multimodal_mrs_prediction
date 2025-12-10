@@ -1,0 +1,55 @@
+experiment_name: midl_ncct_cta_resnext_bnorm_metrics
+
+random_state: 1
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    loss: binary_cross_entropy
+    weight: 1.0
+    metrics: [f1, precision, auroc, auprc, accuracy]
+
+model:
+  name: SEResNext50MMLImaging
+  checkpoint: null
+  
+
+data: 
+  path: data/escapena1/
+  modality: [B0_NCCT, B0_CTA]
+
+hyperparameters:
+  epochs: 1000
+  log_interval: 20
+  batch_size: 4
+  learning_rate: 0.0001
+  early_stopping:
+    patience: 1000
+    target: good_outcome
+    metric: f1
+    goal: max
+    min_improvement: 0.0004
+  learning_rate_scheduler:
+    factor: 0.99
+    patience: 50
+
+preprocessing:
+  B0_NCCT:
+    spacing: [0.45, 0.45, 2.5]
+    size: [291, 356, 54]
+    windowing:
+      level: 40
+      width: 80
+    normalize:
+      mean: 29.81
+      std: 12.06
+  B0_CTA:
+    spacing: [0.47, 0.47, 0.63]
+    size: [278, 337, 221]
+    windowing:
+      level: 250
+      width: 400
+    normalize:
+      mean: 50.78
+      std: 6.18

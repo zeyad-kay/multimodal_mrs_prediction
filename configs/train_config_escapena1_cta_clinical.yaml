@@ -1,0 +1,52 @@
+experiment_name: midl_cta_clinical_resnext_bnorm_metrics_wl40_ww80
+
+random_state: 1
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    loss: binary_cross_entropy
+    weight: 1.0
+    metrics: [f1, precision, auroc, auprc, accuracy]
+
+model:
+  name: SEResNext50MML
+  checkpoint: null
+  
+
+data: 
+  path: data/escapena1/
+  modality: "B0_CTA"
+  tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
+
+hyperparameters:
+  epochs: 1000
+  log_interval: 20
+  batch_size: 6
+  learning_rate: 0.0001
+  early_stopping:
+    patience: 1000
+    target: good_outcome
+    metric: f1
+    goal: max
+    min_improvement: 0.0004
+  learning_rate_scheduler:
+    factor: 0.99
+    patience: 50
+
+preprocessing:
+  spacing: [0.47, 0.47, 0.63]
+  size: [278, 337, 221]
+  # windowing:
+  #   level: 250
+  #   width: 400
+  # normalize:
+  #   mean: 50.78
+  #   std: 6.18
+  windowing:
+    level: 40
+    width: 80
+  normalize:
+    mean: 43.53
+    std: 17.64

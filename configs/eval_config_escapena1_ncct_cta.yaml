@@ -1,0 +1,41 @@
+experiment_name: escapena1_vp0r56c3_eval
+
+random_state: 12345
+
+tasks:
+  -
+    type: classification
+    target: good_outcome
+    metrics: [f1, precision, recall, specificity, auroc, auprc, accuracy]
+    bootstrap: 1000
+    ci: 95
+
+model:
+  name: SEResNext50MMLImaging
+  checkpoint: wandb/run-20251204_224620-vp0r56c3/files/SEResNext50MMLImaging.tar
+
+data: 
+  path: data/escapena1/test.csv
+  tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
+
+batch_size: 1
+
+preprocessing:
+  B0_NCCT:
+    spacing: [0.45, 0.45, 2.5]
+    size: [291, 356, 54]
+    windowing:
+      level: 40
+      width: 80
+    normalize:
+      mean: 29.81
+      std: 12.06
+  B0_CTA:
+    spacing: [0.47, 0.47, 0.63]
+    size: [278, 337, 221]
+    windowing:
+      level: 250
+      width: 400
+    normalize:
+      mean: 50.78
+      std: 6.18

@@ -1,0 +1,246 @@
+import os
+import pandas as pd
+import wandb
+import dotenv
+import torch
+import time
+import signal
+from mrs_prediction.losses import MultiTaskLoss
+from mrs_prediction.utils import parse_train_args, save_checkpoint_to_wandb, log_to_wandb, load_config, calculate_metric
+from mrs_prediction.model_zoo import *
+from mrs_prediction.dataset import *
+from mrs_prediction.transforms import *
+from monai.utils.misc import set_determinism
+from monai.data.dataloader import DataLoader
+import datetime
+from monai.transforms.compose import Compose
+from monai.transforms.utility.dictionary import ToTensord
+from monai.data.dataset import Dataset
+
+def handle_slurm_timeout(signal, frame, run, model_name, model, optimizer, lr_scheduler, log_dict, best_metric):
+
+    if run:
+        save_checkpoint_to_wandb(model_name, model, "torch", run, optimizer=optimizer, lr_scheduler=lr_scheduler, epoch=run.step, best_metric=log_dict[best_metric])
+        run.finish()
+
+    print("Exitting gracefully")
+
+    exit()
+
+def train(model, criterion, criterion_weights, optimizer, data_loader, log_dict):
+    t_s = time.perf_counter()
+    model.train()
+    for batch in data_loader:
+        optimizer.zero_grad()
+        labels = batch["labels"]
+        tabular = labels[:,1:]
+        labels = labels[:,0:1]
+        logits = model(tabular.to(torch.float32))
+        _, total_loss = criterion(logits, labels.to(torch.float32), criterion_weights)
+        total_loss.backward()
+        optimizer.step()
+
+    log_dict["train/time"] = round(time.perf_counter() - t_s, 3)
+    return
+
+def validate(model, criterion, criterion_weights, data_loader, data_type, log_dict, tasks):
+    model.eval()
+    true = torch.empty((len(data_loader.dataset), len(tasks)))
+    logits = torch.empty((len(data_loader.dataset), len(tasks)))
+    idx = 0
+    with torch.no_grad():
+        for batch in data_loader:
+            labels = batch["labels"]
+            tabular = labels[:,1:]
+            labels = labels[:,0:1].to(torch.float32)
+            outputs = model(tabular.to(torch.float32))
+            true[idx:idx+labels.shape[0]] = labels
+            logits[idx:idx+labels.shape[0]] = outputs
+            idx += labels.shape[0]
+
+
+    tasks_loss, total_loss = criterion(logits, true, criterion_weights)
+    log_dict[f"{data_type}/loss"] = total_loss.item()
+    
+    sigmoid = torch.nn.Sigmoid()
+    probs = sigmoid(logits)
+
+    for i,task in enumerate(tasks):
+        task_name = task["target"]
+        log_dict[f"{data_type}/{task_name}/loss"] = tasks_loss[i][1]
+
+        for metric in task["metrics"]:
+            log_dict[f"{data_type}/{task_name}/{metric}"] = calculate_metric(probs[:,i], true[:,i], metric)
+
+    return
+
+def main(args):
+    configs = load_config(args.config)
+
+    cv_fold = args.fold
+
+    set_determinism(configs["random_state"])
+
+    run = None
+    run = wandb.init(name=configs["experiment_name"] + f"_{cv_fold}", resume="allow", config=configs)
+
+    train_params = configs["hyperparameters"]
+    epochs = train_params["epochs"]
+    epoch_log_interval = train_params["log_interval"]
+    batch_size = train_params["batch_size"]
+    lr = train_params["learning_rate"]
+    early_stopping = train_params["early_stopping"]
+    early_stopping_patience = early_stopping["patience"]
+    early_stopping_target = early_stopping["target"]
+    early_stopping_metric = early_stopping["metric"]
+    early_stopping_goal = early_stopping["goal"]
+    early_stopping_min_improvement = early_stopping["min_improvement"]
+    lr_scheduler_params = train_params["learning_rate_scheduler"]
+
+    data_params = configs["data"]
+    modality = data_params["modality"]
+    tabular = data_params["tabular"]
+    data_path = os.path.join(os.environ["PROJECT_DIR"], data_params["path"])
+    fold_path = os.path.join(data_path, f"fold_{cv_fold}")
+
+    tasks = configs["tasks"]
+    losses = []
+    loss_weights = []
+    targets = []
+    for task in tasks:
+        targets.append(task["target"])
+        losses.append(task["loss"])
+        loss_weights.append(task["weight"])
+
+    loss_weights = torch.tensor(loss_weights, dtype=torch.float32)
+
+    model_params = configs["model"]
+    model_name = model_params["name"]
+    model_checkpoint = model_params["checkpoint"]
+
+    bad_epochs = 0
+    start_epoch = 0
+    best_metric = 0.0 if early_stopping_goal == "max" else float('inf')
+    converged = False
+
+    # Define transforms
+    # train_transform = get_train_transforms(modality, window_level=window_level, window_width=window_width, voxel_spacing=voxel_spacing, image_size=image_size, mean_intensity=mean_intensity, std_intensity=std_intensity)
+    # val_transform = get_test_transforms(modality, window_level=window_level, window_width=window_width, voxel_spacing=voxel_spacing, image_size=image_size, mean_intensity=mean_intensity, std_intensity=std_intensity)
+
+    train_df, val_df = pd.read_csv(os.path.join(fold_path, "train.csv")), pd.read_csv(os.path.join(fold_path, "val.csv"))
+
+
+
+    # train_df["age"] = train_df["age"] / 103.8
+    # train_df["mrs_BL"] = train_df["mrs_BL"] / 6.0
+    # train_df["onset_time_to_treatment"] = train_df["onset_time_to_treatment"] / 1652.0
+    # train_df["baseline_nihss"] = train_df["baseline_nihss"] / 42.0
+    # train_df["baseline_aspects"] = train_df["baseline_aspects"] / 10.0
+    
+    # val_df["age"] = val_df["age"] / 103.8
+    # val_df["mrs_BL"] = val_df["mrs_BL"] / 6.0
+    # val_df["onset_time_to_treatment"] = val_df["onset_time_to_treatment"] / 1652.0
+    # val_df["baseline_nihss"] = val_df["baseline_nihss"] / 42.0
+    # val_df["baseline_aspects"] = val_df["baseline_aspects"] / 10.0
+
+
+
+    train_data = [{"labels": labels} for labels in train_df[targets + tabular].values]
+
+    train_transform = Compose([
+        ToTensord(keys=["labels"])
+    ], lazy=True)
+
+    val_transform = Compose([
+        ToTensord(keys=["labels"])
+    ], lazy=True)
+
+    train_ds = Dataset(data=train_data, transform=train_transform)
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+
+    val_data = [{"labels": labels} for labels in val_df[targets + tabular].values]
+    val_ds = Dataset(data=val_data, transform=val_transform)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
+
+    model = init_model(model_name, in_features=len(tabular))
+    
+    checkpoint = {}
+    if model_checkpoint:
+        # checkpoint = torch.load(os.path.join(run.dir, f"{model_checkpoint}.tar"), weights_only=True, map_location=local_rank)
+        checkpoint = torch.load(model_checkpoint, weights_only=True, map_location="cpu")
+        model.load_state_dict(checkpoint['model_state_dict'])
+        start_epoch = checkpoint.get('epoch')
+
+    model = torch.compile(model)    
+    
+    criterion = MultiTaskLoss(losses, targets)
+
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=torch.tensor(lr))
+    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0001, nesterov=True)
+    # lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=early_stopping_goal, threshold=lr_scheduler_params["threshold"], threshold_mode="abs", patience=lr_scheduler_params["patience"], factor=lr_scheduler_params["factor"])
+    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=lr_scheduler_params["factor"])
+
+    if checkpoint.get('optimizer_state_dict'):
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+    log_dict = {}
+
+    signal.signal(signal.SIGTERM, lambda signal, frame, run=run, model_name=model_name, model=model, optimizer=optimizer, lr_scheduler=lr_scheduler, log_dict=log_dict, best_metric=f"val/{early_stopping_target}/{early_stopping_metric}": handle_slurm_timeout(signal, frame, run, model_name, model, optimizer, lr_scheduler, log_dict, best_metric))
+
+    print("Started training...", flush=True)
+    for epoch in range(start_epoch + 1, epochs + 1):
+
+        print(f"{datetime.datetime.now()} Epoch {epoch}/{epochs}", flush=True)
+
+        log_dict["train/lr"] = lr_scheduler.get_last_lr()[0]
+        log_dict["train/time"] = 0.0
+
+        train(model, criterion, loss_weights, optimizer, train_loader, log_dict)
+
+        print(f"{datetime.datetime.now()} \tFinished training...", flush=True)
+
+        validate(model, criterion, loss_weights, train_loader, "train", log_dict, tasks)
+        validate(model, criterion, loss_weights, val_loader, "val", log_dict, tasks)
+
+        print(f"{datetime.datetime.now()} \tFinished validating...", flush=True)
+
+        if early_stopping_goal == "max":
+            improvement = (log_dict[f"val/{early_stopping_target}/{early_stopping_metric}"]) > (best_metric + early_stopping_min_improvement)
+        else:
+            improvement = (log_dict[f"val/{early_stopping_target}/{early_stopping_metric}"] + early_stopping_min_improvement) < best_metric
+        
+        if improvement:
+            best_metric = log_dict[f"val/{early_stopping_target}/{early_stopping_metric}"]
+            bad_epochs = 0
+
+            print("\tSaving best model...")
+            save_checkpoint_to_wandb(model_name, model, "torch", run, optimizer=optimizer, lr_scheduler=lr_scheduler, epoch=epoch, best_metric=best_metric)
+
+            if best_metric == 0.0:
+                converged = True
+                print(f"{datetime.datetime.now()} \t{early_stopping_target} {early_stopping_metric} {early_stopping_goal}d...")
+        else:
+            bad_epochs += 1
+            if bad_epochs == early_stopping_patience:
+                converged = True
+                print("\tEarly stopping triggered...")
+
+        print("\tLogging log_dict to wandb...")
+        log_to_wandb(run, log_dict, epoch)
+
+        if converged:
+            break
+        
+        # lr_scheduler.step(log_dict[f"val/{early_stopping_target}/{early_stopping_metric}"])
+        lr_scheduler.step()
+    
+    save_checkpoint_to_wandb(model_name, model, "torch", run, optimizer=optimizer, lr_scheduler=lr_scheduler, epoch=epoch, best_metric=best_metric)
+    run.finish()
+
+if __name__ == "__main__":
+    dotenv.load_dotenv()
+    args = parse_train_args()
+    main(args)
