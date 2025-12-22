@@ -1,4 +1,4 @@
-experiment_name: midl_ncct_clinical_resnext_bnorm_metrics
+experiment_name: ncct_clinical_resnext
 
 random_state: 1
 
@@ -38,7 +38,6 @@ hyperparameters:
 preprocessing:
   spacing: [0.45, 0.45, 2.5]
   size: [291, 356, 54]
-  # size: [288, 352, 48]
   windowing:
     level: 40
     width: 80

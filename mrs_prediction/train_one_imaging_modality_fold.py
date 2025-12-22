@@ -134,7 +134,6 @@ def main(args):
     if model_checkpoint:
         print(f"Loading checkpoint...")
         checkpoint = torch.load(model_checkpoint, weights_only=True, map_location="cpu")
-        checkpoint['model_state_dict'] = {k.replace("module._orig_mod.",""):v for k,v in checkpoint['model_state_dict'].items()}
         model.load_state_dict(checkpoint['model_state_dict'])
         start_epoch = checkpoint.get('epoch')
 
@@ -165,8 +164,8 @@ def main(args):
         print(f"{datetime.datetime.now()} \tFinished training...", flush=True)
 
         if epoch % epoch_log_interval == 0:
-            validate(model.module, criterion, loss_weights, train_loader_for_eval, "train", log_dict, tasks)
-            validate(model.module, criterion, loss_weights, val_loader, "val", log_dict, tasks)
+            validate(model, criterion, loss_weights, train_loader_for_eval, "train", log_dict, tasks)
+            validate(model, criterion, loss_weights, val_loader, "val", log_dict, tasks)
 
             print(f"{datetime.datetime.now()} \tFinished validating...", flush=True)
 
