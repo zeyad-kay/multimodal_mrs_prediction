@@ -1,4 +1,4 @@
-experiment_name: midl_ncct_resnext_metrics
+experiment_name: ncct_resnext
 
 random_state: 1
 
@@ -18,7 +18,6 @@ model:
 data: 
   path: data/escapena1/
   modality: "B0_NCCT"
-  tabular: [mrs_BL,age,baseline_nihss,onset_time_to_treatment,baseline_aspects,male,left_side_stroke,history_of_hypertension,history_of_smoking,history_of_diabetes,history_of_atrial_fibrilation,history_of_peripheral_vascular_disease,history_of_high_cholestrol,history_of_congestive_heart_failure,history_of_chronic_renal_failure,history_of_major_surgery,history_of_past_stroke,history_of_recent_stroke,history_of_coronary_artery_disease,ica_occlusion,distal_m1_mca_occlusion,proximal_m1_mca_occlusion,mid_m1_mca_occlusion,m2_m3_mca_occlusion]
 
 hyperparameters:
   epochs: 1000
@@ -38,7 +37,6 @@ hyperparameters:
 preprocessing:
   spacing: [0.45, 0.45, 2.5]
   size: [291, 356, 54]
-  # size: [288, 352, 48]
   windowing:
     level: 40
     width: 80
