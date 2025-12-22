@@ -1,4 +1,4 @@
-experiment_name: midl_ncct_cta_resnext_bnorm_metrics
+experiment_name: ncct_cta_resnext
 
 random_state: 1
 
