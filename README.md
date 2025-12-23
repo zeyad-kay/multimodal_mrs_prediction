@@ -12,7 +12,6 @@ $ source .venv/bin/activate
 2. Install dependencies:
 ```sh
 $ pip install -r requirements.txt
-$ pip install -e .
 ```
 
 3. Create a `.env` file and enter Weights and Biases credentials and the rest of environment variables:
