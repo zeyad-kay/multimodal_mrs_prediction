@@ -1,14 +1,12 @@
 import pickle
 import torch
-from monai.networks.nets.densenet import DenseNet121
-from monai.networks.nets.resnet import resnet18, resnet10, resnet200, resnet101, resnet50
-from monai.networks.nets.efficientnet import EfficientNetBN
-from monai.networks.nets.resnet import ResNetFeatures
-from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from monai.networks.nets.senet import SEResNext50
-from monai.networks.nets.vit import ViT
 from monai.networks.layers.factories import Norm
+from monai.utils import ensure_tuple_rep
+from monai.networks.nets.swin_unetr import SwinTransformer as SwinViT
+from einops import rearrange
 
 class MLP(torch.nn.Module):
     def __init__(self, in_features):
@@ -25,77 +23,7 @@ class MLP(torch.nn.Module):
         x = self.fc2(self.norm(self.fc1(x)))
         x = self.fc3(self.relu(x))
         return x
-    
-class SimpleTransferLearning(torch.nn.Module):
-    def __init__(self, backbone_name, num_classes, pretrained, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.backbone = ResNetFeatures(backbone_name, pretrained, spatial_dims=3, in_channels=1)
-        self.flatten = torch.nn.Flatten(start_dim=1)
-        self.linear = torch.nn.LazyLinear(out_features=1024)
-        # self.linear = torch.nn.Linear(131072,out_features=1024)
-        self.leaky_relu = torch.nn.LeakyReLU()
-        self.classifier = torch.nn.Linear(1024, num_classes)
-    
-    def forward(self, x):
-        fmaps = self.backbone(x)
-        full = self.flatten(fmaps[-1])
-        return self.classifier(self.leaky_relu(self.linear(full)))
-
-
-class ViTWrapper(ViT):
-
-    def load_mae_encoder_weights(self, mae_ckpt):
-        encoder_state_dict = {}
-        for k,v in mae_ckpt["model_state_dict"].items():
-            if k.startswith("blocks.") or k.startswith("cls") or k.startswith("patch_embedding"):
-                
-                # LayerNorm params in MAE are named 'blocks.12.weight' and 'blocks.12.bias'
-                # while in ViT, they are named 'norm.weight' and 'norm.bias'
-                if k.startswith("blocks.12"):
-                    encoder_state_dict[f"norm.{k.split('.')[-1]}"] = v
-                else:
-                    encoder_state_dict[k] = v
-
-        self.load_state_dict(encoder_state_dict, strict=False)
-    
-    def forward(self, x):
-        x = self.patch_embedding(x)
-        if hasattr(self, "cls_token"):
-            cls_token = self.cls_token.expand(x.shape[0], -1, -1)
-            x = torch.cat((cls_token, x), dim=1)
-        for blk in self.blocks:
-            x = blk(x)
-        x = self.norm(x)
-        if hasattr(self, "classification_head"):
-            x = self.classification_head(x[:, 0])
-        return x
-
-class MultimodalResNet10(torch.nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.imaging_backbone = resnet10(n_input_channels=1, feed_forward=False)
-        self.clinical_backbone = torch.nn.Linear(24, 512)
-        self.relu = torch.nn.ReLU()
-        self.feedforward = torch.nn.Linear(1024, 512)
-        self.classifier = torch.nn.Linear(512, 1)
-    
-    def forward(self, imgs, clinical):
-        return self.classifier(self.relu(self.feedforward(torch.cat([self.imaging_backbone(imgs), self.relu(self.clinical_backbone(clinical))], dim=1))))
-
-class PretrainedResNet10(torch.nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.backbone = resnet10(n_input_channels=1, feed_forward=False)
-        self.fc = torch.nn.Sequential(
-            torch.nn.Linear(512, 1024, bias=False),
-            torch.nn.BatchNorm1d(1024),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Linear(1024, 1, bias=False),
-        )
-    
-    def forward(self, x):
-        return self.fc(self.backbone(x))
-    
+  
 class SEResNext50Single(torch.nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -280,10 +208,6 @@ class Predictor(torch.nn.Module):
             return out, x
         return x
 
-from monai.utils import ensure_tuple_rep
-from monai.networks.nets.swin_unetr import SwinTransformer as SwinViT
-from einops import rearrange
-
 class MultiSwinTrans(torch.nn.Module):
     def __init__(self, clin_size=2, attention=False, follow=0, class_mode='cat'):
         super().__init__()
@@ -330,48 +254,15 @@ class MultiSwinTrans(torch.nn.Module):
         return out
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def init_model(model, **kwargs):
     models = {
         "MLP": lambda: MLP(in_features=kwargs.get("in_features")),
-        "DenseNet121": lambda: DenseNet121(spatial_dims=3, in_channels=1, out_channels=kwargs.get("out_channels"), dropout_prob=0.1),
-        "ResNet50": lambda: resnet50(n_input_channels=1, num_classes=kwargs.get("out_channels"), feed_forward=True),
-        "ResNet101": lambda: resnet101(n_input_channels=1, num_classes=kwargs.get("out_channels"), feed_forward=True),
-        "ResNet200": lambda: resnet200(n_input_channels=1, num_classes=kwargs.get("out_channels"), feed_forward=True),
-        "ResNet18": lambda: resnet18(n_input_channels=1, num_classes=kwargs.get("out_channels"), feed_forward=True),
-        "ResNet10": lambda: resnet10(n_input_channels=1, num_classes=kwargs.get("out_channels"), feed_forward=True),
-        "PretrainedResNet10": lambda: PretrainedResNet10(),
-        "SEResNext50": lambda: SEResNext50(in_channels=1, num_classes=kwargs.get("out_channels"), spatial_dims=3),
         "SEResNext50Single": lambda: SEResNext50Single(),
         "SEResNext50MML": lambda: SEResNext50MML(),
         "SEResNext50MMLALL": lambda: SEResNext50MMLALL(),
         "SEResNext50MMLImaging": lambda: SEResNext50MMLImaging(),
-        "EfficientNetB3": lambda: EfficientNetBN("efficientnet-b3", spatial_dims=3, in_channels=1, num_classes=kwargs.get("out_channels")),
-        "ViT": lambda: ViTWrapper(in_channels=1, img_size=(336,400,64), patch_size=(16,16,16), hidden_size=768, mlp_dim=512, num_layers=6, num_heads=6, num_classes=1, proj_type="conv",pos_embed_type="sincos", post_activation="", classification=True),
         "MultiSwinTrans": lambda: MultiSwinTrans(),
-        "MultimodalResNet10": lambda: MultimodalResNet10(),
-        "SimpleTransferLearning": lambda: SimpleTransferLearning("resnet18", pretrained=True, num_classes=kwargs.get("out_channels")),
         "RandomForestClassifier": lambda: RandomForestClassifier(**kwargs),
-        "HistGradientBoostingClassifier": lambda: HistGradientBoostingClassifier(**kwargs),
         "LogisticRegression": lambda: LogisticRegression(**kwargs)
     }
     return models[model]()
