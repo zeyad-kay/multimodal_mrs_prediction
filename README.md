@@ -1,5 +1,29 @@
 # Validating the Benefit of Combining Imaging and Clinical Data for Ischemic Stroke Outcome Prediction
 
+## Data
+
+The data used in this study may be available upon request. The directory structure should look like:
+```
+data/escapena1/
+├── fold_1
+│   ├── train.csv
+│   ├── val.csv
+├── fold_2
+│   ├── train.csv
+│   ├── val.csv
+├── fold_3
+│   ├── train.csv
+│   ├── val.csv
+├── fold_4
+│   ├── train.csv
+│   ├── val.csv
+├── fold_5
+│   ├── train.csv
+│   ├── val.csv
+├── train.csv
+├── test.csv
+```
+
 ## Setup
 
 1. Initialize a virtual environment:
