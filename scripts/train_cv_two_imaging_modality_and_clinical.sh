@@ -7,5 +7,5 @@ source .env
 wandb enabled
 
 for i in {1..5}; do
-    nohup python ${PROJECT_DIR}/mrs_prediction/train_two_imaging_modality_and_clinical_fold.py --config ${1} --fold ${i} > "train_two_imaging_modality_and_clinical_fold_${i}.txt" &
+    python ${PROJECT_DIR}/mrs_prediction/train_two_imaging_modality_and_clinical_fold.py --config ${1} --fold ${i} > "train_two_imaging_modality_and_clinical_fold_${i}.txt"
 done

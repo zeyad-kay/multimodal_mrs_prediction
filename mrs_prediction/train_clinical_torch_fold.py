@@ -4,7 +4,6 @@ import wandb
 import dotenv
 import torch
 import time
-import signal
 from mrs_prediction.losses import MultiTaskLoss
 from mrs_prediction.utils import parse_train_args, save_checkpoint_to_wandb, log_to_wandb, load_config, calculate_metric
 from mrs_prediction.model_zoo import *
@@ -16,16 +15,6 @@ import datetime
 from monai.transforms.compose import Compose
 from monai.transforms.utility.dictionary import ToTensord
 from monai.data.dataset import Dataset
-
-def handle_slurm_timeout(signal, frame, run, model_name, model, optimizer, lr_scheduler, log_dict, best_metric):
-
-    if run:
-        save_checkpoint_to_wandb(model_name, model, "torch", run, optimizer=optimizer, lr_scheduler=lr_scheduler, epoch=run.step, best_metric=log_dict[best_metric])
-        run.finish()
-
-    print("Exitting gracefully")
-
-    exit()
 
 def train(model, criterion, criterion_weights, optimizer, data_loader, log_dict):
     t_s = time.perf_counter()
@@ -188,8 +177,6 @@ def main(args):
 
     log_dict = {}
 
-    signal.signal(signal.SIGTERM, lambda signal, frame, run=run, model_name=model_name, model=model, optimizer=optimizer, lr_scheduler=lr_scheduler, log_dict=log_dict, best_metric=f"val/{early_stopping_target}/{early_stopping_metric}": handle_slurm_timeout(signal, frame, run, model_name, model, optimizer, lr_scheduler, log_dict, best_metric))
-
     print("Started training...", flush=True)
     for epoch in range(start_epoch + 1, epochs + 1):
 
@@ -234,7 +221,6 @@ def main(args):
         if converged:
             break
         
-        # lr_scheduler.step(log_dict[f"val/{early_stopping_target}/{early_stopping_metric}"])
         lr_scheduler.step()
     
     save_checkpoint_to_wandb(model_name, model, "torch", run, optimizer=optimizer, lr_scheduler=lr_scheduler, epoch=epoch, best_metric=best_metric)
