@@ -123,7 +123,7 @@ def get_intensity_statistics(dataloader):
 
     mean = sum_intensity / num_voxels
     std = np.sqrt((sum_intensity_squared + num_voxels*mean**2 - 2*mean*sum_intensity) / num_voxels)
-    return round(mean, 2), round(std, 2)
+    return np.round(mean, 2).astype(np.float64), np.round(std, 2).astype(np.float64)
 
 def extract_dataset_statistics(train_data):
 
@@ -204,11 +204,11 @@ def extract_dataset_statistics(train_data):
 
             print("Extracting intensity statistics after resizing to target shape...")
 
-            mean_intensity, std_intensity = get_intensity_statistics(dl)
-            stats[modality]["target_mean_intensity"] = mean_intensity
-            stats[modality]["target_std_intensity"] = std_intensity
+        mean_intensity, std_intensity = get_intensity_statistics(dl)
+        stats[modality]["target_mean_intensity"] = mean_intensity
+        stats[modality]["target_std_intensity"] = std_intensity
 
-            print(f"Mean intensity: {mean_intensity}")
-            print(f"std intensity: {std_intensity}")
+        print(f"Mean intensity: {mean_intensity}")
+        print(f"std intensity: {std_intensity}")
 
     return stats
