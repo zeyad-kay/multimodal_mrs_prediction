@@ -7,7 +7,7 @@ import torch
 import wandb
 import yaml
 import json
-from torcheval.metrics.functional import binary_f1_score, binary_accuracy, binary_auroc, binary_precision, binary_recall, mean_squared_error, binary_auprc, binary_confusion_matrix
+import torcheval.metrics.functional as eval_metrics
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -58,6 +58,19 @@ def parse_dataset_creation_args():
 
     return parser.parse_args()
 
+def parse_shap_args():
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument("--run", type=str, required=True, help="W&B run name")
+    parser.add_argument("--bg_samples", type=int, required=True, help="Number of background training samples to use")
+    parser.add_argument("--wl", type=int, required=False, help="Window level for vizualition. If not specified, the one used during training will be used")
+    parser.add_argument("--ww", type=int, required=False, help="Window width for vizualition. If not specified, the one used during training will be used")
+
+    return parser.parse_args()
+
+
 def load_config(cfg_path):
     config = {}
     with open(cfg_path) as stream:
@@ -72,24 +85,29 @@ def mean_absolute_error(pred, true):
 
 def calculate_metric(pred, true, metric):
     metric_dict = {
-        "accuracy": binary_accuracy,
-        "f1": binary_f1_score,
-        "auroc": binary_auroc,
-        "auprc": binary_auprc,
-        "precision": binary_precision,
+        "accuracy": eval_metrics.binary_accuracy,
+        "f1": eval_metrics.binary_f1_score,
+        "auroc": eval_metrics.binary_auroc,
+        "auprc": eval_metrics.binary_auprc,
+        "precision": eval_metrics.binary_precision,
         "recall": recall,
         "specificity": specificity,
-        "mean_squared_error": mean_squared_error,
+        "negative_predictive_value": negative_predictive_value,
+        "mean_squared_error": eval_metrics.mean_squared_error,
         "mean_absolute_error": mean_absolute_error
     }
     return metric_dict[metric](pred, true).item()
 
+def negative_predictive_value(pred, true):
+    tn, fn = eval_metrics.binary_confusion_matrix(pred, true.to(int))[:,0]
+    return tn / (tn + fn)
+
 def specificity(pred, true):
-    tn, fp = binary_confusion_matrix(pred, true.to(int))[0]
+    tn, fp = eval_metrics.binary_confusion_matrix(pred, true.to(int))[0]
     return tn / (tn + fp)
 
 def recall(pred, true):
-    return binary_recall(pred, true.to(torch.int))
+    return eval_metrics.binary_recall(pred, true.to(torch.int))
 
 def log_to_wandb(wandb_run, metrics, epoch):
     wandb_run.log(metrics, step=epoch)
@@ -179,19 +197,19 @@ def bootstrap_summary(rounds, metrics, predictions, true, ci=95, random_state=No
 
     return summary
 
-def save_shap_values(model, x_train, x_test, file_name, feature_names_mapping):
+def save_shap_values(model, x_train, x_test, file_name, feature_names, algorithm="auto"):
 
-    explainer = shap.Explainer(model.predict_proba, x_train)
+    explainer = shap.Explainer(model, x_train, algorithm=algorithm, feature_names=feature_names)
 
     shap_values = explainer(x_test)
 
     plt.figure(dpi=600)
 
     shap.plots.beeswarm(shap_values[:,:,1], max_display=x_train.shape[1])
-    ax = plt.gca()
+    # ax = plt.gca()
 
-    yticklabels = [feature_names_mapping[label.get_text()] for label in ax.get_yticklabels()]
-    ax.set_yticklabels(yticklabels)
+    # yticklabels = [feature_names_mapping[label.get_text()] for label in ax.get_yticklabels()]
+    # ax.set_yticklabels(yticklabels)
 
     plt.tight_layout()
 
